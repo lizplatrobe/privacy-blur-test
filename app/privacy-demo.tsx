@@ -28,11 +28,13 @@ function PrivacyDemoInner() {
   const { hasPermission, requestPermission } = useCameraPermission();
   const device = useCameraDevice("front");
   const photoOutput = usePhotoOutput({});
-  const [isCameraReady, setIsCameraReady] = useState(false);
+
+  const [isPreviewReady, setIsPreviewReady] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [requesting, setRequesting] = useState(false);
 
   const [photoUri, setPhotoUri] = useState<string | undefined>(undefined);
   const [imageSize, setImageSize] = useState({ width: 1, height: 1 });
-  const [requesting, setRequesting] = useState(false);
 
   const { faces, status, error, clearFaces } = useFacesInPhoto(photoUri);
 
@@ -73,10 +75,14 @@ function PrivacyDemoInner() {
   const takePhoto = async () => {
     try {
       clearFaces?.();
+      setCameraError(null);
 
       const result = await photoOutput.capturePhotoToFile({ flash: "off" }, {});
 
-      if (!result?.filePath) return;
+      if (!result?.filePath) {
+        setCameraError("Photo was captured, but no file path was returned.");
+        return;
+      }
 
       const uri = result.filePath.startsWith("file://")
         ? result.filePath
@@ -85,12 +91,14 @@ function PrivacyDemoInner() {
       setPhotoUri(uri);
     } catch (e) {
       console.error("Photo capture failed:", e);
+      setCameraError(String(e));
     }
   };
 
   const retake = () => {
     setPhotoUri(undefined);
     clearFaces?.();
+    setCameraError(null);
   };
 
   if (!hasPermission) {
@@ -125,7 +133,7 @@ function PrivacyDemoInner() {
   if (device == null) {
     return (
       <View style={styles.center}>
-        <Text style={styles.text}>No camera found.</Text>
+        <Text style={styles.text}>No front camera found.</Text>
 
         <Pressable style={styles.secondaryButton} onPress={() => router.back()}>
           <Text style={styles.secondaryButtonText}>Back</Text>
@@ -143,7 +151,15 @@ function PrivacyDemoInner() {
             device={device}
             isActive={true}
             outputs={[photoOutput]}
-            onInitialized={() => setIsCameraReady(true)}
+            onPreviewStarted={() => {
+              console.log("Preview started");
+              setIsPreviewReady(true);
+              setCameraError(null);
+            }}
+            onError={(e) => {
+              console.error("Camera error:", e);
+              setCameraError(String(e));
+            }}
           />
 
           <Pressable style={styles.backButton} onPress={() => router.back()}>
@@ -152,18 +168,26 @@ function PrivacyDemoInner() {
 
           <View style={styles.bottomBar}>
             <Text style={styles.label}>
-              {isCameraReady
+              {isPreviewReady
                 ? "Take a photo to detect faces"
                 : "Preparing camera..."}
             </Text>
 
+            <Text style={styles.debugText}>
+              Preview ready: {String(isPreviewReady)}
+            </Text>
+
+            <Text style={styles.debugText}>Error: {cameraError ?? "none"}</Text>
+
+            <Text style={styles.debugText}>Using: front camera</Text>
+
             <Pressable
               style={[
                 styles.primaryButton,
-                !isCameraReady && styles.disabledButton,
+                !isPreviewReady && styles.disabledButton,
               ]}
               onPress={takePhoto}
-              disabled={!isCameraReady}
+              disabled={!isPreviewReady}
             >
               <Text style={styles.primaryButtonText}>Capture Photo</Text>
             </Pressable>
@@ -298,6 +322,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
   },
+  debugText: {
+    color: "#fff",
+    marginBottom: 10,
+    textAlign: "center",
+  },
   primaryButton: {
     backgroundColor: "#2563eb",
     paddingVertical: 14,
@@ -331,8 +360,7 @@ const styles = StyleSheet.create({
   },
   faceBox: {
     position: "absolute",
-    borderWidth: 3,
-    borderColor: "#ef4444",
+    backgroundColor: "rgba(0,0,0,0.7)",
     borderRadius: 12,
   },
   loadingOverlay: {
