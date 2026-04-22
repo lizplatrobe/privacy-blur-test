@@ -3,11 +3,12 @@ import {
   useFacesInPhoto,
 } from "@infinitered/react-native-mlkit-face-detection";
 import { router } from "expo-router";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Dimensions,
   Image,
+  Linking,
   Pressable,
   StyleSheet,
   Text,
@@ -29,16 +30,11 @@ function PrivacyDemoInner() {
 
   const [photoUri, setPhotoUri] = useState<string | undefined>(undefined);
   const [imageSize, setImageSize] = useState({ width: 1, height: 1 });
+  const [requesting, setRequesting] = useState(false);
 
   const { faces, status, error, clearFaces } = useFacesInPhoto(photoUri);
 
-  useEffect(() => {
-    if (!hasPermission) {
-      requestPermission();
-    }
-  }, [hasPermission, requestPermission]);
-
-  useEffect(() => {
+  React.useEffect(() => {
     if (!photoUri) return;
 
     Image.getSize(
@@ -53,12 +49,27 @@ function PrivacyDemoInner() {
       screenWidth / imageSize.width,
       previewHeight / imageSize.height,
     );
+
     return {
       width: imageSize.width * scale,
       height: imageSize.height * scale,
       scale,
     };
   }, [imageSize]);
+
+  const handleRequestPermission = async () => {
+    try {
+      setRequesting(true);
+      const granted = await requestPermission();
+      if (!granted) {
+        console.log("Camera permission denied");
+      }
+    } catch (e) {
+      console.error("Permission request failed:", e);
+    } finally {
+      setRequesting(false);
+    }
+  };
 
   const takePhoto = async () => {
     try {
@@ -73,6 +84,7 @@ function PrivacyDemoInner() {
       const uri = photo.path.startsWith("file://")
         ? photo.path
         : `file://${photo.path}`;
+
       setPhotoUri(uri);
     } catch (e) {
       console.error("Photo capture failed:", e);
@@ -87,7 +99,28 @@ function PrivacyDemoInner() {
   if (!hasPermission) {
     return (
       <View style={styles.center}>
-        <Text style={styles.text}>Requesting camera permission...</Text>
+        <Text style={styles.text}>Camera permission is required.</Text>
+
+        <Pressable
+          style={styles.primaryButton}
+          onPress={handleRequestPermission}
+          disabled={requesting}
+        >
+          <Text style={styles.primaryButtonText}>
+            {requesting ? "Requesting..." : "Grant Camera Permission"}
+          </Text>
+        </Pressable>
+
+        <Pressable
+          style={styles.secondaryButton}
+          onPress={() => Linking.openSettings()}
+        >
+          <Text style={styles.secondaryButtonText}>Open App Settings</Text>
+        </Pressable>
+
+        <Pressable style={styles.secondaryButton} onPress={() => router.back()}>
+          <Text style={styles.secondaryButtonText}>Back</Text>
+        </Pressable>
       </View>
     );
   }
@@ -96,6 +129,10 @@ function PrivacyDemoInner() {
     return (
       <View style={styles.center}>
         <Text style={styles.text}>No camera found.</Text>
+
+        <Pressable style={styles.secondaryButton} onPress={() => router.back()}>
+          <Text style={styles.secondaryButtonText}>Back</Text>
+        </Pressable>
       </View>
     );
   }
@@ -224,6 +261,7 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 16,
     textAlign: "center",
+    marginBottom: 16,
   },
   backButton: {
     position: "absolute",
@@ -257,6 +295,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 24,
     borderRadius: 12,
+    marginBottom: 12,
   },
   primaryButtonText: {
     color: "#fff",
@@ -313,6 +352,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 20,
     borderRadius: 12,
+    marginBottom: 12,
   },
   secondaryButtonText: {
     color: "#fff",

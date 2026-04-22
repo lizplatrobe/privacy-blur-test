@@ -20,7 +20,8 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.privacyblurtest"
+      "package": "com.anonymous.privacyblurtest",
+      "permissions": ["android.permission.CAMERA"]
     },
     "web": {
       "output": "static",
