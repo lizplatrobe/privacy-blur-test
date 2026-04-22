@@ -3,7 +3,7 @@ import {
   useFacesInPhoto,
 } from "@infinitered/react-native-mlkit-face-detection";
 import { router } from "expo-router";
-import React, { useMemo, useRef, useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Dimensions,
@@ -18,6 +18,7 @@ import {
   Camera,
   useCameraDevice,
   useCameraPermission,
+  usePhotoOutput,
 } from "react-native-vision-camera";
 
 const screenWidth = Dimensions.get("window").width;
@@ -26,7 +27,8 @@ const previewHeight = Dimensions.get("window").height * 0.7;
 function PrivacyDemoInner() {
   const { hasPermission, requestPermission } = useCameraPermission();
   const device = useCameraDevice("front");
-  const cameraRef = useRef<Camera>(null);
+  const photoOutput = usePhotoOutput({});
+  const [isCameraReady, setIsCameraReady] = useState(false);
 
   const [photoUri, setPhotoUri] = useState<string | undefined>(undefined);
   const [imageSize, setImageSize] = useState({ width: 1, height: 1 });
@@ -60,10 +62,7 @@ function PrivacyDemoInner() {
   const handleRequestPermission = async () => {
     try {
       setRequesting(true);
-      const granted = await requestPermission();
-      if (!granted) {
-        console.log("Camera permission denied");
-      }
+      await requestPermission();
     } catch (e) {
       console.error("Permission request failed:", e);
     } finally {
@@ -75,15 +74,13 @@ function PrivacyDemoInner() {
     try {
       clearFaces?.();
 
-      const photo = await cameraRef.current?.takePhoto({
-        flash: "off",
-      });
+      const result = await photoOutput.capturePhotoToFile({ flash: "off" }, {});
 
-      if (!photo?.path) return;
+      if (!result?.filePath) return;
 
-      const uri = photo.path.startsWith("file://")
-        ? photo.path
-        : `file://${photo.path}`;
+      const uri = result.filePath.startsWith("file://")
+        ? result.filePath
+        : `file://${result.filePath}`;
 
       setPhotoUri(uri);
     } catch (e) {
@@ -142,11 +139,11 @@ function PrivacyDemoInner() {
       {!photoUri ? (
         <>
           <Camera
-            ref={cameraRef}
             style={StyleSheet.absoluteFill}
             device={device}
             isActive={true}
-            photo={true}
+            outputs={[photoOutput]}
+            onInitialized={() => setIsCameraReady(true)}
           />
 
           <Pressable style={styles.backButton} onPress={() => router.back()}>
@@ -154,9 +151,20 @@ function PrivacyDemoInner() {
           </Pressable>
 
           <View style={styles.bottomBar}>
-            <Text style={styles.label}>Take a photo to detect faces</Text>
+            <Text style={styles.label}>
+              {isCameraReady
+                ? "Take a photo to detect faces"
+                : "Preparing camera..."}
+            </Text>
 
-            <Pressable style={styles.primaryButton} onPress={takePhoto}>
+            <Pressable
+              style={[
+                styles.primaryButton,
+                !isCameraReady && styles.disabledButton,
+              ]}
+              onPress={takePhoto}
+              disabled={!isCameraReady}
+            >
               <Text style={styles.primaryButtonText}>Capture Photo</Text>
             </Pressable>
           </View>
@@ -296,6 +304,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     borderRadius: 12,
     marginBottom: 12,
+  },
+  disabledButton: {
+    opacity: 0.5,
   },
   primaryButtonText: {
     color: "#fff",
